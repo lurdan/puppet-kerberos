@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+# kpropd.init  Start and stop the Kerberos 5 propagation client.
+#
+# chkconfig:   - 35 65
+# description: Kerberos 5 is a trusted third-party authentication system.  \
+#	       This script starts and stops the service that allows this \
+#              KDC to receive updates from your master KDC.
+# processname: kpropd
+#
+
+### BEGIN INIT INFO
+# Provides: kprop
+# Required-Start: $local_fs $network
+# Required-Stop: $local_fs $network
+# Should-Start: portreserve
+# Default-Start:
+# Default-Stop: 0 1 2 3 4 5 6
+# Short-Description: start and stop the Kerberos 5 propagation client
+# Description: The kpropd service accepts database updates pushed to it from \
+#              the master KDC.  It will never be needed on a master KDC.
+### END INIT INFO
+
+# Get config.
+[ -r /etc/default/kpropd ] && . /etc/default/kpropd
+
+# Source function library.
+. /lib/lsb/init-functions
+
+RETVAL=0
+prog="Kerberos 5 Propagation Server"
+kpropd=/usr/sbin/kpropd
+
+running_pid() {
+# Check if a given process pid's cmdline matches a given name
+    pid=$1
+    name=$2
+    [ -z "$pid" ] && return 1
+    [ ! -d /proc/$pid ] &&  return 1
+    cmd=`cat /proc/$pid/cmdline | tr "\000" "\n"|head -n 1 |cut -d : -f 1`
+    # Is this the expected server
+    [ "$cmd" != "$name" ] &&  return 1
+    return 0
+}
+
+running() {
+# Check if the process is running looking at /proc
+# (works for all users)
+    pid=`pidof $kpropd` 2>/dev/null || pid="null"
+    running_pid $pid $kpropd || return 1
+    return 0
+}
+
+# Shell functions to cut down on useless shell instances.
+start() {
+  	[ -f /etc/krb5kdc/kpropd.acl ] || exit 6
+	[ -x $kpropd ] || exit 5
+	echo -n $"Starting $prog: "
+	# tell portreserve to release the krb5_prop port
+	#[ -x /sbin/portrelease ] && /sbin/portrelease krb5_prop &>/dev/null || :
+	running || $kpropd -S
+	RETVAL=$?
+	echo
+	if test $RETVAL -ne 0 ; then
+	    if running ; then
+		RETVAL=0
+	    fi
+	fi
+}
+stop() {
+	echo -n $"Stopping $prog: "
+	running && kill `pidof $kpropd`
+	RETVAL=$?
+	echo
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  # We don't really "do" reload, so treat it as a restart.
+  restart|force-reload)
+	stop
+	start
+	;;
+  reload)
+	echo "can't reload configuration, you have to restart it"
+	RETVAL=3
+	;;
+  status)
+	#status -l kprop ${kpropd}
+	running
+	RETVAL=$?
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|restart|reload|status|force-reload}"
+	RETVAL=2
+	;;
+esac
+
+exit $RETVAL
