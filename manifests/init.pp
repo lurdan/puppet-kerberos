@@ -1,8 +1,6 @@
 # "krb5_newrealm" needs to be exected by hand.
 class kerberos (
-  $realm,
-  $kdc = false,
-  $admin = false,
+  $realm
   ) {
 
   case $::operatingsystem {
@@ -12,48 +10,51 @@ class kerberos (
           true => '/var/cache/debconf/krb5-config.preseed',
           default => false,
         },
-        notify => Concat['/etc/krb5.conf'],
+        before => Concat['/etc/krb5.conf'],
       }
     }
     /(?i-mx:redhat|centos)/: {
       package { 'krb5-libs':
-        notify => Concat['/etc/krb5.conf'],
+        before => Concat['/etc/krb5.conf'],
       }
     }
   }
-
-  if $kdc {
-    class { 'kerberos::kdc':
-      admin => $admin,
-      require => Package['krb5-config'];
-    }
+  anchor {
+    'kerberos::config::package::end':
   }
 
   concat { '/etc/krb5.conf':
+    before => Anchor['kerberos::config::package::end'],
   }
 }
 
 class kerberos::kdc ( $admin = false ) {
-  package { 'krb5-kdc': }
+  package { 'krb5-kdc':
+    before => Service['krb5-kdc'],
+  }
+
   service { 'krb5-kdc':
     ensure => $active ? {
       true => running,
       default => stopped,
     },
     enable => $active,
-    require => Package['krb5-kdc'],
+    require => Concat['/etc/krb5.conf'],
   }
 
   if $admin {
-    package {'krb5-admin-server': }
+    package {'krb5-admin-server':
+      before => Service['krb5-admin-server'],
+    }
     service {'krb5-admin-server':
       ensure => $active ? {
         true => running,
         default => stopped,
       },
       enable => $active,
-      require => Package['krb5-admin-server'],
+      require => Concat['/etc/krb5.conf'],
     }
+
     concat { '/etc/krb5kdc/kadm5.acl':
       require => Package['krb5-admin-server'],
       notify => Service['krb5-admin-server'];
@@ -63,16 +64,15 @@ class kerberos::kdc ( $admin = false ) {
 }
 
 class kerberos::kpropd (
-  $active = false,
+  $active = false
   ) {
   file { '/etc/init.d/kpropd':
     owner => root, group => 0, mode => 755,
     source => 'puppet:///modules/kerberos/kpropd.init',
-    require => Class['kerberos::kdc'],
   }
 
   concat { '/etc/krb5kdc/kpropd.acl':
-    require => Class['kerberos::kdc'],
+    require => Package['krb5-kdc'],
     notify => Service['kpropd'],
   }
 
