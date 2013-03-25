@@ -24,6 +24,7 @@ class kerberos (
   }
 
   concat { '/etc/krb5.conf':
+    mode => 744, owner => root, group => 0,
     before => Anchor['kerberos::config::package::end'],
   }
 }
@@ -56,6 +57,7 @@ class kerberos::kdc ( $admin = false ) {
     }
 
     concat { '/etc/krb5kdc/kadm5.acl':
+      mode => 600, owner => root, group => 0,
       require => Package['krb5-admin-server'],
       notify => Service['krb5-admin-server'];
     }
@@ -72,6 +74,7 @@ class kerberos::kpropd (
   }
 
   concat { '/etc/krb5kdc/kpropd.acl':
+    mode => 600, owner => root, group => 0,
     require => Package['krb5-kdc'],
     notify => Service['kpropd'],
   }
